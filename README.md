@@ -1,14 +1,14 @@
-ComFuzzer
+#ComFuzzer
 
-  ComFuzzer - An ActiveX Fuzzer
-
-
-Usage:
-
-  ComFuzzer [ActiveX Name]
+    ComFuzzer - An ActiveX Fuzzer
 
 
-Depends:
+##Usage:
+
+    ComFuzzer [ActiveX Name]
+
+
+##Depends:
 
   psutils
   Windbg

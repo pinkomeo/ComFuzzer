@@ -218,6 +218,26 @@ class TypeLib:
         print "[+] TOTAL FUNC: %d" % len(self.Funcs)
         for funName in  self.Funcs.keys():
             self.FuzzSingleFunc(funName, self.Funcs[funName])
+    
+    def FuzzFunc(self,):
+        print "[+] TOTAL FUNC: %d" % len(self.Funcs)
+        for funName in  self.Funcs.keys():
+            if len(self.Funcs[funName])!= 0:
+                self.FuzzSingleFunc(funName, self.Funcs[funName])
+    
+    def FindDangerFunc(self, funArgs):
+        for arg in funArgs:
+            loarg = arg.lower()
+            if "string" in loarg or "Blob" in loarg:
+                return True
+        return False
+        
+    
+    def FuzzDangerousFunc(self,):
+        print "[+] TOTAL FUNC: %d" % len(self.Funcs)
+        for funName in  self.Funcs.keys():
+            if len(self.Funcs[funName])!= 0 and self.FindDangerFunc(self.Funcs[funName]):
+                self.FuzzSingleFunc(funName, self.Funcs[funName])
 
     def FuzzSingleFunc(self, funName, funArgs):
         argContent = []
@@ -497,81 +517,10 @@ def EnumTypeLib():
     return ret
 
 if __name__=='__main__':
-    '''
-    typelib = TypeLib("VSTwain.dll")
-
-    if typelib.loaded:
-
-        eval("typelib.GetFuncInfo()")
-        for key in typelib.Funcs.keys():
-            print key + ":", typelib.Funcs[key]
-    '''
 
     target = TypeLib(sys.argv[1])
     if target.loaded:
         target.GetFuncInfo()
         for i in range(100):
-            target.FuzzAllFunc()
+            target.FuzzDangerousFunc()
 
-
-
-
-
-    '''
-    key = win32api.RegOpenKey(win32con.HKEY_CLASSES_ROOT, "TypeLib")
-    #win32ui.DoWaitCursor(1)
-
-            if name is not None:
-                #print name
-                key = win32api.RegOpenKey(win32con.HKEY_CLASSES_ROOT, "TypeLib\\%s\\%s" % (keyName, versionStr))
-                try:
-                    num = 0
-                    while 1:
-                        try:
-                            subKey = win32api.RegEnumKey(key, num)
-                        except win32api.error:
-                            break
-                        hSubKey = win32api.RegOpenKey(key, subKey)
-                        try:
-                            value, typ = win32api.RegQueryValueEx(hSubKey, None)
-                            if typ == win32con.REG_EXPAND_SZ:
-                                value = win32api.ExpandEnvironmentStrings(value)
-                        except win32api.error:
-                            value = ""
-                        if subKey=="HELPDIR":
-                            helpPath = value
-                        elif subKey=="Flags":
-                            flags = value
-                        else:
-                            try:
-                                lcid = int(subKey)
-                                lcidkey = win32api.RegOpenKey(key, subKey)
-                                # Enumerate the platforms
-                                lcidnum = 0
-                                while 1:
-                                    try:
-                                        platform = win32api.RegEnumKey(lcidkey, lcidnum)
-                                    except win32api.error:
-                                        break
-                                    try:
-                                        hplatform = win32api.RegOpenKey(lcidkey, platform)
-                                        fname, typ = win32api.RegQueryValueEx(hplatform, None)
-                                        if typ == win32con.REG_EXPAND_SZ:
-                                            fname = win32api.ExpandEnvironmentStrings(fname)
-                                            print fname
-                                    except win32api.error:
-                                        fname = ""
-                                    collected.append((lcid, platform, fname))
-                                lcidnum = lcidnum + 1
-                                win32api.RegCloseKey(lcidkey)
-                            except ValueError:
-                                pass
-                        num = num + 1
-                finally:
-                    win32ui.DoWaitCursor(0)
-                    win32api.RegCloseKey(key)
-        #ret.append(HLIRegisteredTypeLibrary((keyName, versionStr), name))
-            num = num + 1
-    except:
-        pass
-    '''
