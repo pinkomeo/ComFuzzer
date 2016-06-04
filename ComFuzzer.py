@@ -10,6 +10,7 @@ import os
 import shutil
 from StringMutator import *
 from debugger import *
+import xlwt
 
 HLITypeKinds = {
                 pythoncom.TKIND_ENUM : (1, 'Enumeration'),
@@ -165,6 +166,8 @@ class HLIRegisteredTypeLibrary(HLICOM):
 class TypeLib:
     def __init__(self, dllName):
         self.DispatchIDs = []
+        self.prefullname = []
+        self.pretypelibclsid = []
         self.fullName = ""
         self.clsid = ""
         self.typelibclsid = ""
@@ -172,18 +175,31 @@ class TypeLib:
         self.Progid = ""
         print "[*] FUZZING TARGET: ", dllName
         ret = EnumTypeLib()
+        resultcount = 0
+        choosecount = 0
         for a,b in ret:
+            a = str(a)
             if dllName.lower() in a.lower():
-                print "[+] TARGET INFO FOUND! :", a, "=>", b
-                self.fullName = a
-                self.typelibclsid = b
-                break
-
+                print "[",resultcount+1,"]",b#, "=>", a
+                print "     ",a
+                resultcount = resultcount + 1
+                #print "[+] TARGET INFO FOUND! :", a, "=>", b
+                self.prefullname.append(a)
+                self.pretypelibclsid.append(b)
+        h = raw_input("Choose one:")
+        if int(h) < resultcount+1:
+            choosecount = int(h) - 1
+            self.fullName = str(self.prefullname[choosecount])
+            self.typelibclsid = str(self.pretypelibclsid[choosecount])
         self.Progid, self.clsid =  FindDllClsid(self.fullName)
+        self.clsid = str(self.clsid)
         self.tlb = pythoncom.LoadTypeLib(self.fullName)
         self.typeCount = self.tlb.GetTypeInfoCount()
         self.loaded = True
-
+        self.notsavewsf = True
+        print self.Progid
+        print self.clsid
+        print self.typelibclsid
 
 
     def GetTypeDispatch(self,):
@@ -212,7 +228,49 @@ class TypeLib:
                     if type(typ) != type(()):
                         justtyp = typ & pythoncom.VT_TYPEMASK
                         typname = vartypes[justtyp]
-                        self.Funcs[name].append(typname)
+                        self.Funcs[name].append(typname)  
+        aName = self.fullName
+        aName = aName.split('\\')[-1]
+        styleBlueBkg = xlwt.easyxf('pattern: pattern solid, fore_colour ice_blue; font: bold on;')
+        styleYellowBkg = xlwt.easyxf('pattern: pattern solid, fore_colour light_yellow;')
+        styleOrangeBkg = xlwt.easyxf('pattern: pattern solid, fore_colour light_orange;')
+        styleGreenBkg = xlwt.easyxf('pattern: pattern solid, fore_colour light_green;')
+        styleTurquoiseBkg = xlwt.easyxf('pattern: pattern solid, fore_colour light_turquoise;')
+        styleRoseBkg = xlwt.easyxf('pattern: pattern solid, fore_colour red;')
+        book = xlwt.Workbook(encoding='utf-8',style_compression=0)
+        sheet = book.add_sheet(aName,cell_overwrite_ok=True)
+        first_col=sheet.col(0)
+        first_col.width=256*20
+        sec_col=sheet.col(1)
+        sec_col.width=256*40
+        sheet.write(0,0,aName,styleBlueBkg)
+        sheet.write(0,1,self.clsid,styleBlueBkg)
+        i = 0
+        for funName in  self.Funcs.keys():
+            if re.search('AddRef|QueryInterface|Release|GetTypeInfoCount|GetTypeInfo', funName, re.I) is not None:
+                continue
+            elif re.search('saveto|tofile|writeto|deletefile|RegValue|getfile|readfile|download', funName, re.I) is not None:
+                sheet.write(i+1,0,funName,styleRoseBkg)
+            elif re.search('get|file|save|write|delete|reg|show|read|info|url|hostname|upload|net|update|thread', funName, re.I) is not None:
+                sheet.write(i+1,0,funName,styleOrangeBkg)
+            else:
+                sheet.write(i+1,0,funName,styleYellowBkg)
+            print funName
+            print self.Funcs[funName]
+            j = 0
+            for argName in  self.Funcs[funName]:
+                loarg = argName.lower()
+                if "string" in loarg or "Blob" in loarg:
+                    sheet.write(i+1,j+1,argName,styleTurquoiseBkg)
+                else:
+                    sheet.write(i+1,j+1,argName,styleGreenBkg)
+                j = j + 1
+            i = i + 1
+        if os.path.exists(r'funcResult/'):
+            book.save('funcResult/'+aName+'.xls')
+        else:
+            os.makedirs(r'funcResult/')
+            book.save('funcResult/'+aName+'.xls')
 
     def FuzzAllFunc(self,):
         print "[+] TOTAL FUNC: %d" % len(self.Funcs)
@@ -245,7 +303,6 @@ class TypeLib:
             i = 0
             loarg = arg.lower()
             if "string" in loarg or "Blob" in loarg:
-
                 argContent.append('"%s"'% MutateString())
             else:
                 argContent.append(MutateInteger())
@@ -258,6 +315,18 @@ class TypeLib:
             data = data.encode("GBK", 'ignore')
             fp.write(data)
         fp.close()
+        if self.notsavewsf:
+            aName = self.fullName
+            aName = aName.split('\\')[-1]
+            fp = open("funcResult/"+aName+".wsf" , "wb+")
+            try:
+                data = data.encode("utf-8", 'ignore')
+                fp.write(data)
+            except UnicodeEncodeError:
+                data = data.encode("GBK", 'ignore')
+                fp.write(data)
+            fp.close()
+            self.notsavewsf = False
         print "[*] FUZZING FUNC:##" , funName, "## ARGS:", len(argContent)
         dbg = DebuggerMonitor("wscript.exe tmp.wsf", "log")
         dbg.setTimeOut(0.5)
@@ -273,6 +342,7 @@ class TypeLib:
 
 
     def ProduceWscript(self, clsid, funName, argContent):
+        clsid = str(clsid)
         clsid = clsid[1:-1]
         data = ""
         data = "<?XML version='1.0' standalone='yes' ?>\n"
@@ -310,6 +380,31 @@ def MutateString():
 def MutateInteger():
     return random.randint(0, 0xFFFFFFFF)
 
+def Dospath(name):
+    re = ""
+    namesplit = name.split("\\")
+    nameend = namesplit[-1]
+    namesplit = namesplit[0:-1]
+    lastname = nameend.split(".")[-1]
+    lenlastname = 0 - (len(lastname))
+    nameend = nameend[0:lenlastname]
+    namesplit.append(nameend)
+    tempname = ""
+    for item in namesplit:
+        item = item.replace(" ","")
+        if len(item)>8:
+            tempname = item[0:6]
+            if tempname in re:
+                re = re + tempname + "~" + str(re.count(tempname)+1)
+            else:
+                re = re + tempname + "~1"
+        else:
+            re = re + item
+        re = re + "\\"
+    re = re[0:-2] + "." + lastname
+    print re
+    return re
+
 def FindDllClsid(dllname):
     key = 0
     hSubKey = 0
@@ -317,12 +412,15 @@ def FindDllClsid(dllname):
     try:
         #print "CLSID\\%s\\ProID" % clsid.upper()
         key = win32api.RegOpenKey(win32con.HKEY_CLASSES_ROOT, "CLSID")
-        num = 0
-        while True:
+        size = win32api.RegQueryInfoKey(key)[0]
+        #print size
+        #num = 0
+        for i in range(size):
+        #while True:
             try:
-                keyName = win32api.RegEnumKey(key, num)
+                keyName = win32api.RegEnumKey(key, i)
                 #print keyName
-                if num != 0:
+                if i>-1:#num != 0:
                     subKey = win32api.RegOpenKey(key, keyName)
                     #print subKey
                     num1 = 0
@@ -338,20 +436,21 @@ def FindDllClsid(dllname):
                                 #print progid
                             if name.lower() == "inprocserver32":
                                 dll = win32api.RegQueryValue(subKey, name)
-                                #print dll
-                                if dll.lower() == dllname.lower():
+                                if "wmm2ae" in dll :
+                                    print "---------------"
+                                    print dllname
+                                    print dll
+                                if (dll.lower() == dllname.lower() or dll.lower() == Dospath(dllname).lower()):
                                     return (progid, keyName)
-
                         except:
                             break
-
-
                     win32api.RegCloseKey(subKey)
-                num += 1
+                #num += 1
 
-            except:
+            except Exception, e:
+                print e
                 print 222
-                break;
+                break
         #hSubKey = win32api.RegOpenKey(key, 0)
         #value, typ = win32api.RegQueryValueEx(hSubKey, None)
         #print value
@@ -461,7 +560,6 @@ def EnumTypeLib():
         while True:
             try:
                 subKey = win32api.RegEnumKey(key, num)
-
                 #print subKey
             except:
                 break
