@@ -380,30 +380,34 @@ def MutateString():
 def MutateInteger():
     return random.randint(0, 0xFFFFFFFF)
 
-def Dospath(name):
-    re = ""
-    namesplit = name.split("\\")
-    nameend = namesplit[-1]
-    namesplit = namesplit[0:-1]
-    lastname = nameend.split(".")[-1]
-    lenlastname = 0 - (len(lastname))
-    nameend = nameend[0:lenlastname]
-    namesplit.append(nameend)
-    tempname = ""
-    for item in namesplit:
-        item = item.replace(" ","")
-        if len(item)>8:
-            tempname = item[0:6]
-            if tempname in re:
-                re = re + tempname + "~" + str(re.count(tempname)+1)
-            else:
-                re = re + tempname + "~1"
-        else:
-            re = re + item
-        re = re + "\\"
-    re = re[0:-2] + "." + lastname
-    print re
-    return re
+# def Dospath(name):
+#     re = ""
+#     namesplit = name.split("\\")
+#     nameend = namesplit[-1]
+#     namesplit = namesplit[0:-1]
+#     lastname = nameend.split(".")[-1]
+#     lenlastname = 0 - (len(lastname))
+#     nameend = nameend[0:lenlastname]
+#     namesplit.append(nameend)
+#     tempname = ""
+#     for item in namesplit:
+#         item = item.replace(" ","")
+#         if "." in item:
+#             item = split(".")
+#         if len(item)>8:
+#             tempname = item[0:6]
+#             if tempname in re:
+#                 re = re + tempname + "~" + str(re.count(tempname)+1)
+#             else:
+#                 re = re + tempname + "~1"
+#         else:
+#             re = re + item
+#         re = re + "\\"
+#     re = re[0:-2] + "." + lastname
+#     #print re
+#     return re
+
+
 
 def FindDllClsid(dllname):
     key = 0
@@ -436,11 +440,7 @@ def FindDllClsid(dllname):
                                 #print progid
                             if name.lower() == "inprocserver32":
                                 dll = win32api.RegQueryValue(subKey, name)
-                                if "wmm2ae" in dll :
-                                    print "---------------"
-                                    print dllname
-                                    print dll
-                                if (dll.lower() == dllname.lower() or dll.lower() == Dospath(dllname).lower()):
+                                if (dll.lower() == dllname.lower() or dll.lower() == win32api.GetShortPathName(dllname).lower()):
                                     return (progid, keyName)
                         except:
                             break
