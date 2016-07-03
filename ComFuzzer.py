@@ -297,6 +297,10 @@ class TypeLib:
             if len(self.Funcs[funName])!= 0 and self.FindDangerFunc(self.Funcs[funName]):
                 self.FuzzSingleFunc(funName, self.Funcs[funName])
 
+    def FuzzALLFuncAtOneTime(self,):
+        print "[+] TOTAL FUNC: %d" % len(self.Funcs)
+        self.FuzzMultipleFunc()
+
     def FuzzSingleFunc(self, funName, funArgs):
         argContent = []
         for arg in funArgs:
@@ -339,7 +343,56 @@ class TypeLib:
                 print "[*] FAILED TO SAVE TEST CASE!!!"
         #os.system("wscript.exe tmp.wsf")
 
-
+    def FuzzMultipleFunc(self,):
+        funInfos = {}
+        noArgfunInfos = {}
+        for funName in  self.Funcs.keys():
+            argContent = []
+            funArgs = self.Funcs[funName]
+            for arg in funArgs:
+                i = 0
+                loarg = arg.lower()
+                if "string" in loarg or "Blob" in loarg:
+                    argContent.append('"%s"'% MutateString())
+                else:
+                    argContent.append(MutateInteger())
+                i+=1
+            if len(argContent):
+                funInfos[funName] = argContent
+            else:
+                noArgfunInfos[funName] = argContent
+        data = self.ProduceWscriptSome(self.clsid, funInfos, noArgfunInfos)
+        fp = open("tmp.wsf" , "wb+")
+        try:
+            fp.write(data)
+        except UnicodeEncodeError:
+            data = data.encode("GBK", 'ignore')
+            fp.write(data)
+        fp.close()
+        if self.notsavewsf:
+            aName = self.fullName
+            aName = aName.split('\\')[-1]
+            fp = open("funcResult/"+aName+".wsf" , "wb+")
+            try:
+                data = data.encode("utf-8", 'ignore')
+                fp.write(data)
+            except UnicodeEncodeError:
+                data = data.encode("GBK", 'ignore')
+                fp.write(data)
+            fp.close()
+            self.notsavewsf = False
+        #print "[*] FUZZING FUNC:##" , funName, "## ARGS:", len(argContent)
+        print "[*] FUZZING MULTIPLEFUNC:##" , self.fullName
+        dbg = DebuggerMonitor("wscript.exe tmp.wsf", "log")
+        dbg.setTimeOut(0.5)
+        dbg.run()
+        if dbg._faultDetected:
+            logdir =  dbg.get_log_dir()
+            try:
+                shutil.copy("tmp.wsf", os.path.join(logdir, "tmp.wsf"))
+            except:
+                print "[*] FAILED TO SAVE TEST CASE!!!"
+        #os.system("wscript.exe tmp.wsf")
 
     def ProduceWscript(self, clsid, funName, argContent):
         clsid = str(clsid)
@@ -368,6 +421,91 @@ class TypeLib:
 
         data += "\n</script></job></package>"
 
+        return data
+
+    def ProduceWscriptAll(self, clsid, funInfos):
+        #print funInfos
+        clsid = str(clsid)
+        clsid = clsid[1:-1]
+        data = ""
+        data = "<?XML version='1.0' standalone='yes' ?>\n"
+        data += "<package><job id='DoneInVBS' debug='false' error='true'>\n"
+        data += "<object classid='clsid:%s' id='target' />\n" % clsid
+        data += "<script language='vbscript'>\n"
+        i = 0
+        for funName in funInfos.keys():
+            argContent = funInfos[funName]
+
+            if len(argContent):
+                for arg in argContent:
+
+                    data += ("arg%d=" % i)
+                    i += 1
+                    try:
+                        data += arg
+                        data += "\n"
+                    except:
+                        data += "%d" % arg
+                        data += "\n"
+                        pass
+                data += "\ntarget.%s " % funName
+                for j in range(len(argContent)):
+                    data += "arg%d ," % (i-len(argContent)+j)
+                data= data[:-1]
+                data += "\n"
+            else:
+                data += "\ntarget.%s " % funName
+                data += "\n"
+        
+        data += "\n</script></job></package>"
+        return data
+
+    def ProduceWscriptSome(self, clsid, funInfos, noArgfunInfos):
+        #print funInfos
+        clsid = str(clsid)
+        clsid = clsid[1:-1]
+        data = ""
+        data = "<?XML version='1.0' standalone='yes' ?>\n"
+        data += "<package><job id='DoneInVBS' debug='false' error='true'>\n"
+        data += "<object classid='clsid:%s' id='target' />\n" % clsid
+        data += "<script language='vbscript'>\n"
+        i = 0
+
+        someNoArgfunInfos = {}
+        preNoArgfunInfos = random.sample(noArgfunInfos, 2)#random.randint(0,len(noArgfunInfos)-1))
+        someNoArgfunInfos = dict([(k,noArgfunInfos.pop(k,None)) for k in preNoArgfunInfos])
+        for funName in someNoArgfunInfos.keys():
+            data += "\ntarget.%s " % funName
+            data += "\n"
+
+        somefunInfos = {}
+        presomefunInfos = random.sample(funInfos, 2)#random.randint(0,len(funInfos)-1))
+        somefunInfos = dict([(k,funInfos.pop(k,None)) for k in presomefunInfos])
+        for funName in somefunInfos.keys():
+            argContent = somefunInfos[funName]
+
+            if len(argContent):
+                for arg in argContent:
+
+                    data += ("arg%d=" % i)
+                    i += 1
+                    try:
+                        data += arg
+                        data += "\n"
+                    except:
+                        data += "%d" % arg
+                        data += "\n"
+                        pass
+                data += "\ntarget.%s " % funName
+                for j in range(len(argContent)):
+                    data += "arg%d ," % (i-len(argContent)+j)
+                data= data[:-1]
+                data += "\n"
+            else:
+                data += "\ntarget.%s " % funName
+                data += "\n"
+        
+        data += "\n</script></job></package>"
         return data
 
 def MutateString():
@@ -620,5 +758,5 @@ if __name__=='__main__':
     if target.loaded:
         target.GetFuncInfo()
         for i in range(100):
-            target.FuzzDangerousFunc()
+            target.FuzzALLFuncAtOneTime()
 
