@@ -804,6 +804,7 @@ try:
 			#print os.path.exists(self.tempfile)
 			#print self.tempfile
 			#print os.getcwd()
+			time.sleep(5)
 			fd = open(self.tempfile, "rb")
 			self.crashInfo = pickle.loads(fd.read())
 			fd.close()
