@@ -12,6 +12,10 @@ from StringMutator import *
 from debugger import *
 import xlwt
 
+reload(sys)
+sys.setdefaultencoding('utf8')
+#'ascii' codec can't decode byte.
+
 HLITypeKinds = {
                 pythoncom.TKIND_ENUM : (1, 'Enumeration'),
                 pythoncom.TKIND_RECORD : (2, 'Record'),
