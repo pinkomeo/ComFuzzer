@@ -14,7 +14,6 @@ import xlwt
 
 reload(sys)
 sys.setdefaultencoding('utf8')
-#'ascii' codec can't decode byte.
 
 HLITypeKinds = {
                 pythoncom.TKIND_ENUM : (1, 'Enumeration'),
@@ -170,6 +169,7 @@ class HLIRegisteredTypeLibrary(HLICOM):
 class TypeLib:
     def __init__(self, dllName):
         self.DispatchIDs = []
+        self.DispatchCLSIDs = []
         self.prefullname = []
         self.pretypelibclsid = []
         self.fullName = ""
@@ -196,85 +196,171 @@ class TypeLib:
             self.fullName = str(self.prefullname[choosecount])
             self.typelibclsid = str(self.pretypelibclsid[choosecount])
         self.Progid, self.clsid =  FindDllClsid(self.fullName)
-        self.clsid = str(self.clsid)
+        #self.clsid = str(self.clsid)
         self.tlb = pythoncom.LoadTypeLib(self.fullName)
         self.typeCount = self.tlb.GetTypeInfoCount()
-        self.loaded = True
+        self.fuzzableFunc =0
         self.notsavewsf = True
-        print self.Progid
+        self.preProgid=dict(zip(self.clsid,self.Progid))
+        #print "Progid:\n"
+        print self.preProgid
+        #print "clsid:\n"
         print self.clsid
-        print self.typelibclsid
+        #print "typelibclsid:\n"
+        #print self.typelibclsid
+        #print "typelibclsidend====\n"
+        self.loaded = True
 
-
+    def MakeReturnTypeName(self, typ):
+        justtyp = typ & pythoncom.VT_TYPEMASK
+        try:
+            typname = vartypes[justtyp]
+        except KeyError:
+            typname = "?Bad type?"
+        for (flag, desc) in type_flags:
+            if flag & typ:
+                typname = "%s(%s)" % (desc, typname)
+        return typname
+    def MakeReturnType(self, returnTypeDesc):
+        if type(returnTypeDesc)==type(()):
+            first = returnTypeDesc[0]
+            result = self.MakeReturnType(first)
+            if first != pythoncom.VT_USERDEFINED:
+                result = result + " " + self.MakeReturnType(returnTypeDesc[1])
+            return result
+        else:
+            return self.MakeReturnTypeName(returnTypeDesc)
+        
     def GetTypeDispatch(self,):
         for typdID in range(self.typeCount):
             try:
                 ntype = self.tlb.GetTypeInfoType(typdID)
+                if HLITypeKinds[ntype][1] == "CoClass":
+                    self.DispatchCLSIDs.append(typdID)
                 if HLITypeKinds[ntype][1] == "Dispatch":
                     self.DispatchIDs.append(typdID)
             except:
                 print "Error GetTypeDispatch"
                 pass
-    def GetFuncInfo(self,):
+    
+    def GetFuncInfo(self, clsidArray):
         self.GetTypeDispatch()
         #print self.DispatchIDs
-        for id in self.DispatchIDs:
+        count = len(clsidArray)
+        precount = 0
+        totalFunc = 0
+        fuzzable = False
+        self.fuzzableFunc =0
+        self.realclsid = []
+        self.Progid = []
+        print self.DispatchCLSIDs
+        for id in self.DispatchCLSIDs:
             typeinfo = self.tlb.GetTypeInfo(id)
             attr = typeinfo.GetTypeAttr()
+            print attr[0]
+            self.realclsid.append(str(attr[0]))
+            self.Progid.append(self.preProgid[str(attr[0])])
+        print self.realclsid
+        #print self.Progid
+        print self.DispatchIDs
+        for id in self.DispatchIDs:
+            print "\n"+"id:======"+str(id)
+            typeinfo = self.tlb.GetTypeInfo(id)
+            print attr[0]
+            attr = typeinfo.GetTypeAttr()
             nfuncs = attr[6]
+            #self.clsid[count] = self.clsid[count] + "#" + str(nfuncs)
+            if nfuncs == 0:
+                continue
+            self.Funcs[self.realclsid[precount]]={}
             for index in range(nfuncs):
                 fd = typeinfo.GetFuncDesc(index)
                 id = fd[0]
                 name = typeinfo.GetNames(id)[0]
-                self.Funcs[name] = []
+                
+                #print "----------"+str(totalFunc)
+                #print name
+                #print fd[8]
+                typ, flags, default = fd[8]
+                print self.MakeReturnType(typ)
+                #print fd[2]
+                if fd[4] != 1:
+                    name = name + "@"
+                    
+                self.Funcs[self.realclsid[precount]][name] = []
+                totalFunc = totalFunc + 1
                 for argDesc in fd[2]:
                     typ, flags, default = argDesc
-                    if type(typ) != type(()):
-                        justtyp = typ & pythoncom.VT_TYPEMASK
-                        typname = vartypes[justtyp]
-                        self.Funcs[name].append(typname)  
+                    typname = self.MakeReturnType(typ)
+                    self.Funcs[self.realclsid[precount]][name].append(typname) 
+                    
+            precount = precount + 1
+
+        #print self.Funcs
+
         aName = self.fullName
         aName = aName.split('\\')[-1]
-        styleBlueBkg = xlwt.easyxf('pattern: pattern solid, fore_colour ice_blue; font: bold on;')
+        styleBlueBkg = xlwt.easyxf('pattern: pattern solid, fore_colour aqua; font: bold on;')
+        stylePinkBkg = xlwt.easyxf('pattern: pattern solid, fore_colour ice_blue; font: bold on;')
         styleYellowBkg = xlwt.easyxf('pattern: pattern solid, fore_colour light_yellow;')
-        styleOrangeBkg = xlwt.easyxf('pattern: pattern solid, fore_colour light_orange;')
+        styleOrangeBkg = xlwt.easyxf('pattern: pattern solid, fore_colour tan;')
         styleGreenBkg = xlwt.easyxf('pattern: pattern solid, fore_colour light_green;')
         styleTurquoiseBkg = xlwt.easyxf('pattern: pattern solid, fore_colour light_turquoise;')
-        styleRoseBkg = xlwt.easyxf('pattern: pattern solid, fore_colour red;')
+        styleRoseBkg = xlwt.easyxf('pattern: pattern solid, fore_colour coral;')
+        styleGrayBkg = xlwt.easyxf('pattern: pattern solid, fore_colour white;')
         book = xlwt.Workbook(encoding='utf-8',style_compression=0)
         sheet = book.add_sheet(aName,cell_overwrite_ok=True)
         first_col=sheet.col(0)
-        first_col.width=256*20
+        first_col.width=256*40
         sec_col=sheet.col(1)
         sec_col.width=256*40
-        sheet.write(0,0,aName,styleBlueBkg)
-        sheet.write(0,1,self.clsid,styleBlueBkg)
-        i = 0
-        for funName in  self.Funcs.keys():
-            if re.search('AddRef|QueryInterface|Release|GetTypeInfoCount|GetTypeInfo', funName, re.I) is not None:
-                continue
-            elif re.search('saveto|tofile|writeto|deletefile|RegValue|getfile|readfile|download', funName, re.I) is not None:
-                sheet.write(i+1,0,funName,styleRoseBkg)
-            elif re.search('get|file|save|write|delete|reg|show|read|info|url|hostname|upload|net|update|thread', funName, re.I) is not None:
-                sheet.write(i+1,0,funName,styleOrangeBkg)
-            else:
-                sheet.write(i+1,0,funName,styleYellowBkg)
-            print funName
-            print self.Funcs[funName]
-            j = 0
-            for argName in  self.Funcs[funName]:
-                loarg = argName.lower()
-                if "string" in loarg or "Blob" in loarg:
-                    sheet.write(i+1,j+1,argName,styleTurquoiseBkg)
+        trd_col=sheet.col(2)
+        trd_col.width=256*40
+        sheet.write(0,0,aName,stylePinkBkg)
+        
+        xlsCount = 0
+        itemCount = 0
+        i = 1
+        for funNameClsidItem in  self.Funcs.keys():
+            sheet.write(1+xlsCount+itemCount,0,funNameClsidItem,styleBlueBkg)
+            sheet.write(1+xlsCount+itemCount,1,self.preProgid[str(funNameClsidItem)],styleBlueBkg)
+            sheet.write(1+xlsCount+itemCount,2,"",styleBlueBkg)
+            
+            for funName in  self.Funcs[funNameClsidItem].keys():
+                if re.search('AddRef|QueryInterface|Release|GetTypeInfoCount|GetTypeInfo|GetIDsOfNames|Invoke', funName, re.I) is not None:
+                    sheet.write(i+1,0,funName,styleGrayBkg)
+                elif re.search('saveto|tofile|writeto|deletefile|RegValue|getfile|readfile|download|exe|shell', funName, re.I) is not None:
+                    sheet.write(i+1,0,funName,styleRoseBkg)
+                elif re.search('get|file|save|write|delete|reg|show|read|info|url|hostname|upload|net|update|thread', funName, re.I) is not None:
+                    sheet.write(i+1,0,funName,styleOrangeBkg)
                 else:
-                    sheet.write(i+1,j+1,argName,styleGreenBkg)
-                j = j + 1
+                    sheet.write(i+1,0,funName,styleYellowBkg)
+                #print funName
+                #print self.Funcs[funName]
+                j = 0
+                for argName in  self.Funcs[funNameClsidItem][funName]:
+                    loarg = argName.lower()
+                    if "string" in loarg or "Blob" in loarg:
+                        sheet.write(i+1,j+1,argName,styleTurquoiseBkg)
+                        fuzzable = True
+                        
+                    else:
+                        sheet.write(i+1,j+1,argName,styleGreenBkg)
+                    j = j + 1
+                i = i + 1
+                if fuzzable:
+                    self.fuzzableFunc = self.fuzzableFunc + 1
+                    fuzzable = False
             i = i + 1
-        if os.path.exists(r'funcResult/'):
-            book.save('funcResult/'+aName+'.xls')
+            itemCount = itemCount + len(self.Funcs[funNameClsidItem])
+            xlsCount = xlsCount + 1
+        sheet.write(0,1,"Class: "+str(len(self.clsid))+"  Fuzzable: "+str(self.fuzzableFunc),stylePinkBkg)
+        sheet.write(0,2,self.fullName,stylePinkBkg)
+        if os.path.exists(r'funcResult/'+aName+"/"):
+            book.save('funcResult/'+aName+"/"+aName+'.xls')
         else:
-            os.makedirs(r'funcResult/')
-            book.save('funcResult/'+aName+'.xls')
+            os.makedirs(r'funcResult/'+aName+"/")
+            book.save('funcResult/'+aName+"/"+aName+'.xls')
 
     def FuzzAllFunc(self,):
         print "[+] TOTAL FUNC: %d" % len(self.Funcs)
@@ -296,16 +382,17 @@ class TypeLib:
         
     
     def FuzzDangerousFunc(self,):
-        print "[+] TOTAL FUNC: %d" % len(self.Funcs)
-        for funName in  self.Funcs.keys():
-            if len(self.Funcs[funName])!= 0 and self.FindDangerFunc(self.Funcs[funName]):
-                self.FuzzSingleFunc(funName, self.Funcs[funName])
+        print "[+] TOTAL FUZZABLE FUNC: %s" % str(self.fuzzableFunc)
+        for clsidName in self.Funcs.keys():
+            for funName in  self.Funcs[clsidName].keys():
+                if len(self.Funcs[clsidName][funName])!= 0 and self.FindDangerFunc(self.Funcs[clsidName][funName]):
+                    self.FuzzSingleFunc(funName, self.Funcs[clsidName][funName], clsidName)
 
     def FuzzALLFuncAtOneTime(self,):
         print "[+] TOTAL FUNC: %d" % len(self.Funcs)
         self.FuzzMultipleFunc()
 
-    def FuzzSingleFunc(self, funName, funArgs):
+    def FuzzSingleFunc(self, funName, funArgs, clsidName):
         argContent = []
         for arg in funArgs:
             i = 0
@@ -315,7 +402,7 @@ class TypeLib:
             else:
                 argContent.append(MutateInteger())
             i+=1
-        data = self.ProduceWscript(self.clsid, funName, argContent)
+        data = self.ProduceWscript(clsidName, funName, argContent)
         fp = open("tmp.wsf" , "wb+")
         try:
             fp.write(data)
@@ -324,9 +411,10 @@ class TypeLib:
             fp.write(data)
         fp.close()
         if self.notsavewsf:
+            #timeNow = time.strftime("%Y%m%d%H%M%p", time.localtime())
             aName = self.fullName
             aName = aName.split('\\')[-1]
-            fp = open("funcResult/"+aName+".wsf" , "wb+")
+            fp = open("funcResult/"+aName+"/"+aName+"."+funName+".wsf" , "wb+")
             try:
                 data = data.encode("utf-8", 'ignore')
                 fp.write(data)
@@ -334,8 +422,11 @@ class TypeLib:
                 data = data.encode("GBK", 'ignore')
                 fp.write(data)
             fp.close()
-            self.notsavewsf = False
-        print "[*] FUZZING FUNC:##" , funName, "## ARGS:", len(argContent)
+            self.notsavewsf = True
+        if "@" in funName:
+            print "[*] FUZZING PROP:##" , funName.split("@")[0], "## ARGS:", len(argContent)
+        else:
+            print "[*] FUZZING FUNC:##" , funName, "## ARGS:", len(argContent)
         dbg = DebuggerMonitor("wscript.exe tmp.wsf", "log")
         dbg.setTimeOut(0.5)
         dbg.run()
@@ -374,9 +465,10 @@ class TypeLib:
             fp.write(data)
         fp.close()
         if self.notsavewsf:
+            timeNow = time.strftime("%Y%m%d%H%M%p", time.localtime())
             aName = self.fullName
             aName = aName.split('\\')[-1]
-            fp = open("funcResult/"+aName+".wsf" , "wb+")
+            fp = open("funcResult/"+aName+"/"+aName+"."+timeNow+".wsf" , "wb+")
             try:
                 data = data.encode("utf-8", 'ignore')
                 fp.write(data)
@@ -418,7 +510,11 @@ class TypeLib:
                 data += "%d" % arg
                 data += "\n"
                 pass
-        data += "\ntarget.%s " % funName
+        if "@" in funName:
+            funName = funName.split("@")[0]
+            data += "\ntarget.%s = " % funName
+        else:
+            data += "\ntarget.%s " % funName
         for i in range(len(argContent)):
             data += "arg%d ," % i
         data= data[:-1]
@@ -555,11 +651,12 @@ def FindDllClsid(dllname):
     key = 0
     hSubKey = 0
     ret = []
+    aProgid = []
+    aKeyName = []
     try:
         #print "CLSID\\%s\\ProID" % clsid.upper()
         key = win32api.RegOpenKey(win32con.HKEY_CLASSES_ROOT, "CLSID")
         size = win32api.RegQueryInfoKey(key)[0]
-        #print size
         #num = 0
         for i in range(size):
         #while True:
@@ -570,22 +667,27 @@ def FindDllClsid(dllname):
                     subKey = win32api.RegOpenKey(key, keyName)
                     #print subKey
                     num1 = 0
+                    dll = ""
+                    progid = ""
+                    clsid = ""
                     while True:
                         try:
                             name = win32api.RegEnumKey(subKey, num1)
                             num1 += 1
                             #print name
-                            dll = ""
-                            progid = ""
                             if name.lower() == "progid":
                                 progid = win32api.RegQueryValue(subKey, name)
                                 #print progid
                             if name.lower() == "inprocserver32":
                                 dll = win32api.RegQueryValue(subKey, name)
                                 if (dll.lower() == dllname.lower() or dll.lower() == win32api.GetShortPathName(dllname).lower()):
-                                    return (progid, keyName)
+                                    print "*****"+progid+"\n"+keyName+"******\n"
+                                    clsid = keyName
                         except:
                             break
+                    if clsid:
+                        aProgid.append(progid)
+                        aKeyName.append(keyName.upper())
                     win32api.RegCloseKey(subKey)
                 #num += 1
 
@@ -596,6 +698,11 @@ def FindDllClsid(dllname):
         #hSubKey = win32api.RegOpenKey(key, 0)
         #value, typ = win32api.RegQueryValueEx(hSubKey, None)
         #print value
+        print "aProgid:"
+        print aProgid
+        print aKeyName
+        print "aKeyNameend"
+        return (aProgid, aKeyName)
     except Exception, e:
         #print e
         pass
@@ -760,7 +867,8 @@ if __name__=='__main__':
 
     target = TypeLib(sys.argv[1])
     if target.loaded:
-        target.GetFuncInfo()
+        target.GetFuncInfo(target.clsid)
+        print target.Funcs
         for i in range(100):
-            target.FuzzALLFuncAtOneTime()
+           target.FuzzDangerousFunc()
 
