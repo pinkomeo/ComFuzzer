@@ -258,10 +258,12 @@ class TypeLib:
             typeinfo = self.tlb.GetTypeInfo(id)
             attr = typeinfo.GetTypeAttr()
             print attr[0]
-            self.realclsid.append(str(attr[0]))
-            self.Progid.append(self.preProgid[str(attr[0])])
+            if str(attr[0]) in self.clsid:
+                self.realclsid.append(str(attr[0]))
+                self.Progid.append(self.preProgid[str(attr[0])])
         print self.realclsid
         #print self.Progid
+        clsnumber = len(self.realclsid)
         print self.DispatchIDs
         for id in self.DispatchIDs:
             print "\n"+"id:======"+str(id)
@@ -272,6 +274,8 @@ class TypeLib:
             #self.clsid[count] = self.clsid[count] + "#" + str(nfuncs)
             if nfuncs == 0:
                 continue
+            if precount >= clsnumber:
+                break
             self.Funcs[self.realclsid[precount]]={}
             for index in range(nfuncs):
                 fd = typeinfo.GetFuncDesc(index)
@@ -309,7 +313,7 @@ class TypeLib:
         styleRoseBkg = xlwt.easyxf('pattern: pattern solid, fore_colour coral;')
         styleGrayBkg = xlwt.easyxf('pattern: pattern solid, fore_colour white;')
         book = xlwt.Workbook(encoding='utf-8',style_compression=0)
-        sheet = book.add_sheet(aName,cell_overwrite_ok=True)
+        sheet = book.add_sheet(aName[0:25],cell_overwrite_ok=True)
         first_col=sheet.col(0)
         first_col.width=256*40
         sec_col=sheet.col(1)
@@ -449,6 +453,8 @@ class TypeLib:
                 loarg = arg.lower()
                 if "string" in loarg or "Blob" in loarg:
                     argContent.append('"%s"'% MutateString())
+                elif "bool" in loarg:
+                    argContent.append(True)
                 else:
                     argContent.append(MutateInteger())
                 i+=1
