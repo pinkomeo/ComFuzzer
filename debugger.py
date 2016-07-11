@@ -303,7 +303,7 @@ try:
 			self.fault = True
 
 			#print "Exception: Writing to file"
-			fd = open(self.Tempfile, "wb+")
+			fd = open(self.Tempfile, "wb")
 			#fd = open("log.txt", "wb+")
 			fd.write(pickle.dumps(self.crashInfo))
 			fd.close()
@@ -618,6 +618,7 @@ try:
 
 			self.handlingFault = None
 			self.handledFault = None
+
 		def _SetTimeOut(self, t):
 			self.TimeOut = t
 		def _StartDebugger(self):
@@ -647,6 +648,10 @@ try:
 			#(fd, self.tempfile) = tempfile.mkstemp()
 			#print self.tempfile
 			self.tempfile = "debugger.TMP"
+			try:
+				os.remove(self.tempfile)
+			except:
+				pass
 			#os.close(fd)
 			#with open(self.tempfile, "rb+") as f:
 			#	print "succeed"\
@@ -804,11 +809,22 @@ try:
 			#print os.path.exists(self.tempfile)
 			#print self.tempfile
 			#print os.getcwd()
-			time.sleep(5)
-			fd = open(self.tempfile, "rb")
-			self.crashInfo = pickle.loads(fd.read())
+			#time.sleep(0)
+			MAX_LOOP = 10
+			l = 1;
+			while True:
+				try:
+					fd = open(self.tempfile, "rb")
+					break
+				except:
+					time.sleep(1)
+					pass
+			try:
+				self.crashInfo = pickle.loads(fd.read())
+			except:
+				pass
 			fd.close()
-			
+
 			try:
 				os.remove(self.tempfile)
 			except:
@@ -896,6 +912,7 @@ try:
 	        self._faultPath = faultPath
 	        self._timeout = 1.5
 	        self._faultDetected = False
+	        
 
 	    def setTimeOut(self, t):
 	    	self._timeout = t
@@ -909,6 +926,7 @@ try:
 	        self._debugger._StartDebugger()
 	        if self._debugger.DetectedFault():
 	            self._faultDetected = True
+	            print time.strftime("%Y-%m-%d %H:%M:%S" , time.localtime(time.time())) ,
 	            print ">>>>>>>>>>>FAULT DETECTED<<<<<<<<<<"
 	            monitorData = self._debugger.GetMonitorData()
 	            bucketInfo = None
@@ -963,7 +981,7 @@ try:
 	                    fout.write(monitorData[key])
 	                    fout.close()
 
-	        self._debugger._StopDebugger()
+	        self._debugger._StopDebugger(True)
 
 except Exception, e:
 	# Only complain on Windows platforms.
@@ -974,10 +992,15 @@ except Exception, e:
 
 
 if __name__ == "__main__":
-	dbg = DebuggerMonitor("crashtest.exe", "log")
-	dbg.setTimeOut(-1)
-	dbg.run()
-	logdir =  dbg.get_log_dir()
+	
+	
+	
+    while True:
+        dbg = DebuggerMonitor("C:\\TYPSoft FTP Server\\ftpserv.exe", "log")
+        dbg.setTimeOut(-1)
+        dbg.run()
+        if dbg._faultDetected:
+                logdir =  dbg.get_log_dir()
 
-	print "#Iteration Finished"
+	#print "#Iteration Finished"
 	#del(dbg)
